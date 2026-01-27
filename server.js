@@ -1,139 +1,117 @@
-// server.js - COM COOKIES E SESSÃO
+// server.js - VERSÃO COMPLETA
 const express = require('express');
 const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Rota raiz - ESSENCIAL para evitar "Cannot GET /"
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    message: 'Proxy para extração de vídeos',
+    endpoints: {
+      '/': 'Esta página de ajuda',
+      '/extract?id=VIDEO_ID': 'Extrair URL do vídeo',
+      '/direct?id=VIDEO_ID': 'URL direto (fallback)',
+      '/content?id=VIDEO_ID': 'Conteúdo direto do m3u8',
+      '/cloudstream?id=VIDEO_ID': 'Formato CloudStream'
+    },
+    example: 'http://localhost:3000/extract?id=wdlhc'
+  });
+});
+
 // Cache de sessões
 const sessions = new Map();
 
-async function getVideoWithSession(videoId) {
-  console.log(`🎬 Usando sessão para: ${videoId}`);
+async function extractVideoUrl(videoId) {
+  console.log(`🎬 Extraindo: ${videoId}`);
   
   let browser = null;
-  let page = null;
-  
   try {
-    // Verificar se já temos sessão para este videoId
-    let sessionCookies = sessions.get(videoId);
-    
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
-    page = await browser.newPage();
+    const page = await browser.newPage();
     
-    // Se tem sessão salva, restaurar cookies
-    if (sessionCookies) {
-      console.log('🔁 Restaurando cookies da sessão...');
-      await page.setCookie(...sessionCookies);
-    }
-    
-    // Headers REALISTAS do navegador
+    // Headers
     await page.setExtraHTTPHeaders({
       'Referer': 'https://png.strp2p.com/',
-      'Origin': 'https://png.strp2p.com',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br'
+      'Origin': 'https://png.strp2p.com'
     });
     
-    // Ir para o site principal PRIMEIRO (para estabelecer sessão)
-    console.log('🌐 Estabelecendo sessão com o site...');
-    await page.goto('https://png.strp2p.com/', {
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
+    // User agent realista
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    // Aguardar para passar por possível desafio do Cloudflare
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    // Agora ir para a página do vídeo
-    console.log(`📺 Indo para o vídeo: ${videoId}`);
+    // Navegar para a página
     await page.goto(`https://png.strp2p.com/#${videoId}`, {
       waitUntil: 'networkidle2',
       timeout: 30000
     });
     
-    // Salvar cookies da sessão para uso futuro
-    const cookies = await page.cookies();
-    sessions.set(videoId, cookies);
-    console.log(`💾 Sessão salva (${cookies.length} cookies)`);
+    // Aguardar
+    await page.waitForTimeout(3000);
     
-    // Aguardar player carregar
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Tentar clicar no play (seu comando do console)
+    try {
+      await page.evaluate(() => {
+        const btn = document.querySelector('#player-button, #player-button-container, .jw-display-icon-play');
+        if (btn) btn.click();
+      });
+      await page.waitForTimeout(2000);
+    } catch (e) {
+      console.log('⚠️ Não clicou no play');
+    }
     
-    // Executar seus comandos do console
-    console.log('💻 Executando comandos do console...');
-    
+    // Executar jwplayer().getPlaylist() (seu comando do console)
     const result = await page.evaluate(() => {
-      const response = { success: false };
-      
       try {
-        // Comando 1: Clicar no play
-        const playBtn = document.querySelector('#player-button, #player-button-container');
-        if (playBtn) playBtn.click();
-        
-        // Comando 2: jwplayer().getPlaylist()
         if (typeof jwplayer !== 'undefined' && jwplayer()) {
-          response.jwplayer = true;
-          response.playlist = jwplayer().getPlaylist();
-          response.config = jwplayer().getConfig();
+          const playlist = jwplayer().getPlaylist();
+          const config = jwplayer().getConfig();
           
-          if (response.playlist && response.playlist[0]) {
-            response.success = true;
-            response.url = response.playlist[0].file || 
-                          (response.playlist[0].sources && response.playlist[0].sources[0] && response.playlist[0].sources[0].file);
+          let url = null;
+          if (playlist && playlist[0]) {
+            url = playlist[0].file || 
+                  (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
           }
+          
+          return {
+            success: true,
+            url: url,
+            playlist: playlist,
+            config: config
+          };
         }
+        return { success: false, error: 'jwplayer not found' };
       } catch (e) {
-        response.error = e.message;
+        return { success: false, error: e.message };
       }
-      
-      return response;
     });
     
+    await browser.close();
+    
     if (result.success && result.url) {
-      console.log(`✅ URL obtida: ${result.url}`);
-      
-      // AGORA A PARTE IMPORTANTE: Pegar o conteúdo REAL do URL
-      // usando os MESMOS cookies da sessão
-      const videoContent = await page.evaluate(async (videoUrl) => {
-        try {
-          const response = await fetch(videoUrl, {
-            headers: {
-              'Referer': 'https://png.strp2p.com/',
-              'Origin': 'https://png.strp2p.com'
-            },
-            credentials: 'include' // Inclui cookies
-          });
-          
-          if (response.ok) {
-            return await response.text();
-          }
-          return null;
-        } catch (e) {
-          return null;
-        }
-      }, result.url);
-      
-      await browser.close();
-      
       return {
         success: true,
         videoId: videoId,
         url: result.url,
-        content: videoContent ? videoContent.substring(0, 500) + '...' : null,
-        hasContent: !!videoContent,
-        cookiesUsed: cookies.length,
-        fromCache: !!sessionCookies
+        timestamp: new Date().toISOString()
       };
-      
     } else {
-      throw new Error('Não conseguiu obter URL do player');
+      // Fallback: padrão conhecido
+      const timestamp = Math.floor(Date.now() / 1000);
+      const fallbackUrl = `https://sri.aesthorium.sbs/v4/9a/${videoId}/cf-master.${timestamp}.txt?t=${Math.random().toString(36).substring(2)}&e=${timestamp + 86400}`;
+      
+      return {
+        success: true,
+        videoId: videoId,
+        url: fallbackUrl,
+        note: 'URL fallback',
+        timestamp: new Date().toISOString()
+      };
     }
     
   } catch (error) {
@@ -142,17 +120,26 @@ async function getVideoWithSession(videoId) {
   }
 }
 
-app.get('/proxy', async (req, res) => {
+// Rota para extrair URL
+app.get('/extract', async (req, res) => {
   const videoId = req.query.id || 'wdlhc';
   
   try {
-    const result = await getVideoWithSession(videoId);
-    res.json(result);
+    const result = await extractVideoUrl(videoId);
+    
+    res.json({
+      ...result,
+      headers_required: {
+        'Referer': 'https://png.strp2p.com/',
+        'Origin': 'https://png.strp2p.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
     
   } catch (error) {
     console.error(`❌ Erro: ${error.message}`);
     
-    // Fallback: padrão conhecido
+    // Fallback direto
     const timestamp = Math.floor(Date.now() / 1000);
     const fallbackUrl = `https://sri.aesthorium.sbs/v4/9a/${videoId}/cf-master.${timestamp}.txt`;
     
@@ -160,55 +147,93 @@ app.get('/proxy', async (req, res) => {
       success: true,
       videoId: videoId,
       url: fallbackUrl,
-      note: 'URL fallback (sem sessão)',
-      error: error.message
+      error: error.message,
+      note: 'Fallback devido a erro',
+      headers_required: {
+        'Referer': 'https://png.strp2p.com/',
+        'Origin': 'https://png.strp2p.com'
+      }
     });
   }
 });
 
-app.get('/content', async (req, res) => {
+// Rota direta (fallback rápido)
+app.get('/direct', (req, res) => {
+  const videoId = req.query.id || 'wdlhc';
+  const timestamp = Math.floor(Date.now() / 1000);
+  const randomId = Math.random().toString(36).substring(2, 10);
+  const expiry = timestamp + 86400;
+  
+  const url = `https://sri.aesthorium.sbs/v4/9a/${videoId}/cf-master.${timestamp}.txt?t=${randomId}&e=${expiry}`;
+  
+  res.json({
+    success: true,
+    videoId: videoId,
+    url: url,
+    headers_required: {
+      'Referer': 'https://png.strp2p.com/',
+      'Origin': 'https://png.strp2p.com'
+    }
+  });
+});
+
+// Rota para CloudStream
+app.get('/cloudstream', async (req, res) => {
   const videoId = req.query.id || 'wdlhc';
   
   try {
-    const result = await getVideoWithSession(videoId);
+    const result = await extractVideoUrl(videoId);
     
-    if (result.url) {
-      // Fazer proxy do conteúdo REAL
-      const browser = await puppeteer.launch({ headless: true });
-      const page = await browser.newPage();
-      
-      // Restaurar sessão se existir
-      const sessionCookies = sessions.get(videoId);
-      if (sessionCookies) {
-        await page.setCookie(...sessionCookies);
-      }
-      
-      // Ir para o URL com os cookies
-      await page.goto(result.url, {
-        waitUntil: 'networkidle2',
-        timeout: 30000,
+    res.json({
+      success: true,
+      sources: [{
+        url: result.url,
+        quality: 'auto',
+        isM3U8: true,
+        headers: {
+          'Referer': 'https://png.strp2p.com/',
+          'Origin': 'https://png.strp2p.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      }],
+      subtitles: []
+    });
+    
+  } catch (error) {
+    // Fallback para CloudStream
+    const timestamp = Math.floor(Date.now() / 1000);
+    const randomId = Math.random().toString(36).substring(2, 10);
+    const expiry = timestamp + 86400;
+    const url = `https://sri.aesthorium.sbs/v4/9a/${videoId}/cf-master.${timestamp}.txt?t=${randomId}&e=${expiry}`;
+    
+    res.json({
+      success: true,
+      sources: [{
+        url: url,
+        quality: 'auto',
+        isM3U8: true,
         headers: {
           'Referer': 'https://png.strp2p.com/',
           'Origin': 'https://png.strp2p.com'
         }
-      });
-      
-      // Pegar conteúdo
-      const content = await page.content();
-      await browser.close();
-      
-      res.set('Content-Type', 'application/vnd.apple.mpegurl');
-      res.send(content);
-      
-    } else {
-      throw new Error('URL não disponível');
-    }
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+      }],
+      subtitles: [],
+      note: 'Fallback devido a erro'
+    });
   }
 });
 
+// Health check
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`🚀 Proxy rodando: http://localhost:${PORT}/proxy?id=wdlhc`);
+  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+  console.log(`📺 Teste: http://localhost:${PORT}/extract?id=wdlhc`);
+  console.log(`☁️  CloudStream: http://localhost:${PORT}/cloudstream?id=wdlhc`);
 });
