@@ -1,6 +1,6 @@
-// server.js - COM STEALTH PLUGIN PARA BYPASS
+// server.js - COM STEALTH (importação correta)
 const express = require('express');
-const puppeteer = require('puppeteer-extra');
+const puppeteer = require('puppeteer-extra'); // MUDOU AQUI!
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 // Usar plugin stealth
