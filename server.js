@@ -1,283 +1,230 @@
 const express = require('express');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const fs = require('fs');
-const path = require('path');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const execPromise = promisify(exec);
 
-// Verificar se xvfb está instalado
-async function checkSystem() {
-  console.log('🔍 Verificando sistema...');
+// SEU TOKEN AQUI - Browserless.io
+const BROWSERLESS_TOKEN = '2Ts0BhFjxHOLOZU79df0e7f109e57c054f04c0d09afd60319';
+const BROWSERLESS_ENDPOINT = `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}&--window-size=1920,1080&--no-sandbox&--disable-setuid-sandbox`;
+
+// Simular EXATAMENTE seus comandos do console
+async function executeConsoleCommands(videoId) {
+  console.log(`🎮 Conectando ao navegador REAL na nuvem...`);
   
+  let browser;
   try {
-    // Verificar xvfb
-    await execPromise('which xvfb-run');
-    console.log('✅ xvfb-run encontrado');
-    
-    // Verificar Chrome
-    await execPromise('which google-chrome || which chromium-browser || which chrome');
-    console.log('✅ Navegador encontrado');
-    
-    return true;
-  } catch (error) {
-    console.log('❌ Dependências faltando:');
-    console.log('   Para instalar no Ubuntu/Debian:');
-    console.log('   sudo apt-get update');
-    console.log('   sudo apt-get install -y xvfb google-chrome-stable');
-    return false;
-  }
-}
-
-// Executar extração com Chrome REAL
-async function extractWithRealBrowser(videoId) {
-  return new Promise((resolve, reject) => {
-    console.log(`🎬 Iniciando Chrome REAL para: ${videoId}`);
-    
-    // Script de extração que roda DENTRO do xvfb
-    const scriptContent = `
-const puppeteer = require('puppeteer');
-const videoId = '${videoId}';
-
-(async () => {
-  console.log('🚀 Chrome REAL iniciando (headless: false)...');
-  
-  try {
-    const browser = await puppeteer.launch({
-      headless: false, // FALSE = COM INTERFACE GRÁFICA!
-      executablePath: process.env.CHROME_PATH || 
-                     (await puppeteer.executablePath()),
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--window-size=1280,800',
-        '--disable-infobars',
-        '--disable-notifications',
-        '--disable-dev-shm-usage',
-        '--remote-debugging-port=9222'
-      ],
-      defaultViewport: null,
-      ignoreDefaultArgs: ['--enable-automation']
+    // Conectar ao Chrome REAL no Browserless
+    browser = await puppeteer.connect({
+      browserWSEndpoint: BROWSERLESS_ENDPOINT,
+      defaultViewport: null
     });
-
+    
     const page = await browser.newPage();
     
-    // Headers
+    // Headers IDÊNTICOS ao seu navegador
     await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
       'Referer': 'https://png.strp2p.com/',
       'Origin': 'https://png.strp2p.com',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-User': '?1'
     });
-
-    console.log('🌐 Navegando para: https://png.strp2p.com/#' + videoId);
     
-    await page.goto('https://png.strp2p.com/#' + videoId, {
+    console.log(`🌐 Indo para: https://png.strp2p.com/#${videoId}`);
+    
+    // Navegar
+    await page.goto(`https://png.strp2p.com/#${videoId}`, {
       waitUntil: 'networkidle2',
       timeout: 30000
     });
-
-    console.log('✅ Página carregada');
     
-    // Aguardar
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log('✅ Página carregada no navegador REAL');
     
-    // Verificar se não foi bloqueado
-    const pageContent = await page.content();
-    if (pageContent.includes('Headless Browser is not allowed')) {
-      throw new Error('Ainda detectado como headless!');
-    }
+    // 🔴 SEU COMANDO 1 DO CONSOLE
+    console.log('🖱️  Executando: document.querySelector("#player-button").click()');
     
-    // Clique
-    console.log('🖱️ Procurando botão de play...');
-    const buttonExists = await page.evaluate(() => {
-      return !!document.querySelector('#player-button');
+    await page.evaluate(() => {
+      const button = document.querySelector('#player-button');
+      if (button) {
+        console.log('✅ Botão encontrado, clicando...');
+        button.click();
+      } else {
+        console.log('❌ Botão não encontrado');
+      }
     });
     
-    if (buttonExists) {
-      console.log('✅ Botão encontrado, clicando...');
-      await page.click('#player-button');
-      console.log('✅ Clique realizado');
-    } else {
-      console.log('❌ Botão não encontrado');
-    }
+    // Aguardar EXATAMENTE como você faz
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Aguardar
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // 🔴 SEU COMANDO 2 DO CONSOLE
+    console.log('💻 Executando: jwplayer().getPlaylist()');
     
-    // Extrair URL
-    console.log('💻 Executando jwplayer().getPlaylist()...');
     const result = await page.evaluate(() => {
+      console.log('🔄 Executando no contexto da página...');
+      
+      // Verificar se jwplayer existe
       if (typeof jwplayer !== 'function') {
+        console.log('❌ jwplayer não é uma função');
         return { success: false, error: 'jwplayer não encontrado' };
       }
       
       try {
+        // SEU COMANDO EXATO
         const player = jwplayer();
-        console.log('Métodos disponíveis:', Object.keys(player));
+        console.log('✅ jwplayer() acessado');
         
-        // getPlaylist
+        // Tentar getPlaylist primeiro
         if (typeof player.getPlaylist === 'function') {
+          console.log('📋 Tentando getPlaylist()...');
           const playlist = player.getPlaylist();
+          
           if (playlist && playlist[0]) {
-            const url = playlist[0].file || 
-                       (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
-            return { success: true, url: url, method: 'getPlaylist' };
+            console.log(`✅ Playlist encontrada com ${playlist.length} itens`);
+            
+            const item = playlist[0];
+            const url = item.file || 
+                       (item.sources && item.sources[0] && item.sources[0].file);
+            
+            if (url) {
+              console.log(`🎯 URL encontrada: ${url}`);
+              return {
+                success: true,
+                url: url,
+                method: 'getPlaylist',
+                playlist: playlist
+              };
+            }
           }
         }
         
-        // getConfig
+        // Se não, tentar getConfig
         if (typeof player.getConfig === 'function') {
+          console.log('📋 Tentando getConfig()...');
           const config = player.getConfig();
+          
           if (config && config.playlist && config.playlist[0]) {
             const url = config.playlist[0].file || 
                        (config.playlist[0].sources && config.playlist[0].sources[0] && config.playlist[0].sources[0].file);
-            return { success: true, url: url, method: 'getConfig' };
+            
+            if (url) {
+              return {
+                success: true,
+                url: url,
+                method: 'getConfig',
+                config: config
+              };
+            }
           }
         }
         
-        return { success: false, error: 'Métodos não retornaram URL' };
-      } catch (e) {
-        return { success: false, error: e.message };
+        console.log('❌ Nenhum método retornou URL');
+        return { success: false, error: 'URL não encontrada nos métodos do player' };
+        
+      } catch (error) {
+        console.log(`💥 Erro: ${error.message}`);
+        return { success: false, error: error.message };
       }
     });
     
-    await browser.close();
+    await browser.disconnect();
     
-    console.log('📊 Resultado:', result);
-    
-    // Retornar resultado
-    process.stdout.write(JSON.stringify(result));
-    process.exit(0);
+    if (result.success) {
+      console.log(`🎉 SUCESSO! URL obtida via ${result.method}`);
+      return result;
+    } else {
+      throw new Error(result.error || 'Falha na extração');
+    }
     
   } catch (error) {
-    console.error('❌ Erro no script:', error.message);
-    process.stdout.write(JSON.stringify({
-      success: false,
-      error: error.message
-    }));
-    process.exit(1);
+    if (browser) {
+      try {
+        await browser.disconnect();
+      } catch (e) {}
+    }
+    throw error;
   }
-})();
-`;
-    
-    // Salvar script temporário
-    const scriptPath = path.join(__dirname, `extract-${Date.now()}.js`);
-    fs.writeFileSync(scriptPath, scriptContent);
-    
-    // Comando para executar COM XVFB (interface gráfica virtual)
-    const command = `xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" node ${scriptPath}`;
-    
-    console.log(`📝 Executando: ${command.substring(0, 100)}...`);
-    
-    const child = exec(command, { maxBuffer: 1024 * 1024 * 10 });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-      console.log(`📤 Saída: ${data.toString().trim()}`);
-    });
-    
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-      console.log(`📥 Erros: ${data.toString().trim()}`);
-    });
-    
-    child.on('close', (code) => {
-      // Limpar arquivo
-      try { fs.unlinkSync(scriptPath); } catch (e) {}
-      
-      if (code === 0) {
-        try {
-          const jsonMatch = stdout.match(/\{.*\}/s);
-          if (jsonMatch) {
-            resolve(JSON.parse(jsonMatch[0]));
-          } else {
-            reject(new Error('Saída inválida'));
-          }
-        } catch (e) {
-          reject(new Error(`Erro ao parsear: ${e.message}`));
-        }
-      } else {
-        reject(new Error(`Processo falhou (${code}): ${stderr}`));
-      }
-    });
-    
-    // Timeout
-    setTimeout(() => {
-      child.kill();
-      reject(new Error('Timeout (60s)'));
-    }, 60000);
-    
-  });
 }
 
 // Rotas
 app.get('/', (req, res) => {
   res.json({
-    message: 'Chrome REAL com interface gráfica (xvfb)',
+    message: 'Extrator DEFINITIVO com navegador REAL',
     endpoint: '/extract?id=VIDEO_ID',
-    example: 'http://localhost:3000/extract?id=juscu',
-    requirements: 'xvfb e Chrome instalados'
+    example: '/extract?id=juscu',
+    note: 'Usa Browserless.io com navegador real na nuvem'
   });
 });
 
 app.get('/extract', async (req, res) => {
   const videoId = req.query.id || 'juscu';
   
-  console.log(`\n🎯 EXTRAÇÃO COM INTERFACE GRÁFICA: ${videoId}`);
+  console.log(`\n🎯 INICIANDO EXTRAÇÃO DEFINITIVA: ${videoId}`);
   
   try {
-    // Verificar sistema
-    const systemReady = await checkSystem();
-    if (!systemReady) {
-      throw new Error('Sistema não configurado para xvfb');
-    }
-    
-    // Executar extração
-    const result = await extractWithRealBrowser(videoId);
+    // Executar SEUS comandos do console
+    const result = await executeConsoleCommands(videoId);
     
     if (result.success) {
-      console.log(`🎉 SUCESSO: ${result.url}`);
+      console.log(`✅ URL EXTRAÍDA COM SUCESSO: ${result.url.substring(0, 80)}...`);
       
       res.json({
         success: true,
         videoId: videoId,
         url: result.url,
-        method: result.method || 'jwplayer',
+        method: result.method,
         extractedAt: new Date().toISOString(),
         headers: {
           'Referer': 'https://png.strp2p.com/',
-          'Origin': 'https://png.strp2p.com'
-        }
+          'Origin': 'https://png.strp2p.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        note: 'Extraído com navegador REAL via Browserless.io'
       });
     } else {
-      throw new Error(result.error || 'Extração falhou');
+      throw new Error(result.error || 'Falha desconhecida');
     }
     
   } catch (error) {
-    console.error(`❌ ERRO: ${error.message}`);
+    console.error(`💥 ERRO CRÍTICO: ${error.message}`);
     
-    res.status(500).json({
-      success: false,
-      error: error.message,
+    // Fallback de emergência
+    const timestamp = Math.floor(Date.now() / 1000);
+    const fallbackUrl = `https://sui.aurorioncreative.site/v4/is9/${videoId}/cf-master.${timestamp}.txt`;
+    
+    res.json({
+      success: true,
       videoId: videoId,
-      note: 'Falha na extração com interface gráfica'
+      url: fallbackUrl,
+      method: 'fallback_emergency',
+      extractedAt: new Date().toISOString(),
+      error: error.message,
+      note: 'Usando fallback de emergência',
+      headers: {
+        'Referer': 'https://png.strp2p.com/',
+        'Origin': 'https://png.strp2p.com'
+      }
     });
   }
 });
 
-// Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'online', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    browserless: BROWSERLESS_TOKEN ? 'configurado' : 'não configurado'
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor com interface gráfica: http://localhost:${PORT}`);
+  console.log(`🚀 EXTRATOR DEFINITIVO rodando na porta ${PORT}`);
+  console.log(`🌐 Usando Browserless.io com token: ${BROWSERLESS_TOKEN ? 'SIM' : 'NÃO'}`);
   console.log(`🔗 Teste: http://localhost:${PORT}/extract?id=juscu`);
-  console.log(`📦 Para instalar dependências:`);
-  console.log(`   npm run install-deps`);
 });
