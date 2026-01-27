@@ -1,4 +1,4 @@
-// server.js - SIMULAÇÃO PERFEITA DO NAVEGADOR
+// server.js - APENAS LOGS, SEM FALLBACK
 const express = require('express');
 const puppeteer = require('puppeteer');
 
@@ -10,416 +10,378 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 app.get('/extract', async (req, res) => {
   const videoId = req.query.id || 'juscu';
   
-  console.log(`\n🎯 SIMULAÇÃO PERFEITA DO NAVEGADOR PARA: ${videoId}`);
+  console.log(`\n🔴🔴🔴 INÍCIO SEM FALLBACK PARA: ${videoId} 🔴🔴🔴`);
   
   let browser = null;
+  const ALL_LOGS = [];
+  
+  const LOG = (msg, type = 'INFO') => {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] [${type}] ${msg}`;
+    ALL_LOGS.push(logEntry);
+    console.log(logEntry);
+  };
+  
   try {
-    // CONFIGURAÇÃO IDÊNTICA AO NAVEGADOR
+    LOG('1. Abrindo navegador');
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
     const page = await browser.newPage();
     
-    // 1. SETAR COOKIES E HEADERS IDÊNTICOS
-    await page.setExtraHTTPHeaders({
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'DNT': '1',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Cache-Control': 'max-age=0'
+    // Capturar TUDO do console da página
+    page.on('console', msg => {
+      const text = `PÁGINA CONSOLE: ${msg.text()}`;
+      LOG(text, 'PAGE');
     });
     
-    // 2. HABILITAR JAVASCRIPT E COOKIES
-    await page.setJavaScriptEnabled(true);
+    // Capturar erros da página
+    page.on('pageerror', error => {
+      const text = `PÁGINA ERRO: ${error.message}`;
+      LOG(text, 'ERROR');
+    });
     
-    // 3. INTERCEPTAR REQUISIÇÕES PARA VER O QUE ACONTECE
+    // Capturar requests
     page.on('request', request => {
-      const url = request.url();
-      if (url.includes('jwplayer') || url.includes('aesthorium')) {
-        console.log(`🌐 REQUEST: ${request.method()} ${url}`);
+      if (request.url().includes('jwplayer') || request.url().includes('aesthorium')) {
+        LOG(`REQUEST: ${request.method()} ${request.url()}`, 'NETWORK');
       }
     });
     
-    page.on('response', response => {
-      const url = response.url();
-      if (url.includes('jwplayer') || url.includes('aesthorium')) {
-        console.log(`📡 RESPONSE: ${response.status()} ${url}`);
-      }
-    });
-    
-    // 4. NAVEGAR
-    console.log(`🌐 Indo para: https://png.strp2p.com/#${videoId}`);
+    LOG(`2. Navegando para: https://png.strp2p.com/#${videoId}`);
     await page.goto(`https://png.strp2p.com/#${videoId}`, {
-      waitUntil: 'networkidle0', // ESPERAR TUDO
+      waitUntil: 'networkidle0',
       timeout: 60000
     });
     
-    // 5. AGUARDAR MUITO MAIS TEMPO
-    console.log('⏳ Aguardando 10 segundos para carregamento TOTAL...');
+    LOG('3. Página carregada. Aguardando 10 segundos...');
     await delay(10000);
     
-    // 6. TENTAR INICIALIZAR O JW PLAYER MANUALMENTE
-    console.log('⚡ Tentando inicializar JW Player manualmente...');
+    // 🔴 PASSO CRÍTICO 1: ANÁLISE ANTES DO CLIQUE
+    LOG('🔴🔴🔴 ANÁLISE ANTES DO CLIQUE 🔴🔴🔴');
     
-    const initResult = await page.evaluate(() => {
-      console.log('🔄 Inicialização manual do JW Player iniciada');
+    const preClickAnalysis = await page.evaluate(() => {
+      const analysis = {};
       
-      // Tentativa 1: Verificar se window.jwplayer está pronto
-      if (typeof jwplayer !== 'function') {
-        console.log('❌ jwplayer não é uma função');
-        return { success: false, step: 'jwplayer check' };
+      // Salvar logs da página
+      window._myLogs = [];
+      const originalLog = console.log;
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        window._myLogs.push(args.join(' '));
+      };
+      
+      // 1. Botão de play
+      analysis.button = {};
+      const button = document.querySelector('#player-button');
+      if (button) {
+        analysis.button.exists = true;
+        analysis.button.tagName = button.tagName;
+        analysis.button.innerHTML = button.innerHTML;
+        analysis.button.outerHTML = button.outerHTML.substring(0, 200);
+        analysis.button.classList = Array.from(button.classList);
+        analysis.button.style = button.style.cssText;
+        analysis.button.disabled = button.disabled;
+        analysis.button.hidden = button.hidden;
+        analysis.button.offsetParent = !!button.offsetParent;
+        
+        console.log('✅ #player-button encontrado:', analysis.button);
+      } else {
+        analysis.button.exists = false;
+        console.log('❌ #player-button NÃO encontrado');
       }
       
-      // Tentativa 2: Verificar se há elementos JW Player no DOM
-      const jwElements = document.querySelectorAll('[data-jwplayer]');
-      console.log(`📊 Elementos [data-jwplayer]: ${jwElements.length}`);
+      // 2. JW Player
+      analysis.jwplayer = {};
+      analysis.jwplayer.exists = typeof jwplayer === 'function';
+      console.log(`JW Player é função: ${analysis.jwplayer.exists}`);
       
-      // Tentativa 3: Procurar scripts do JW Player
-      const jwScripts = Array.from(document.scripts).filter(script => 
-        script.src && script.src.includes('jwplayer')
-      );
-      console.log(`📊 Scripts JW Player: ${jwScripts.length}`);
-      
-      // Tentativa 4: Disparar eventos que podem inicializar o player
-      try {
-        // Evento que o JW Player escuta
-        const event = new Event('DOMContentLoaded', { bubbles: true });
-        document.dispatchEvent(event);
-        console.log('✅ Disparado evento DOMContentLoaded');
-      } catch (e) {
-        console.log(`⚠️ Erro ao disparar evento: ${e.message}`);
+      if (analysis.jwplayer.exists) {
+        try {
+          const player = jwplayer();
+          analysis.jwplayer.player = !!player;
+          console.log(`JW Player instanciado: ${analysis.jwplayer.player}`);
+          
+          if (player) {
+            // Listar TUDO do player
+            analysis.jwplayer.allProperties = Object.getOwnPropertyNames(player);
+            analysis.jwplayer.methods = analysis.jwplayer.allProperties.filter(p => typeof player[p] === 'function');
+            analysis.jwplayer.properties = analysis.jwplayer.allProperties.filter(p => typeof player[p] !== 'function');
+            
+            console.log(`Métodos disponíveis: ${analysis.jwplayer.methods.length}`);
+            console.log(`Métodos: ${analysis.jwplayer.methods.join(', ')}`);
+            console.log(`Propriedades: ${analysis.jwplayer.properties.join(', ')}`);
+            
+            // Testar métodos específicos
+            const testMethods = ['getPlaylist', 'getConfig', 'play', 'setup', 'on', 'ready'];
+            analysis.jwplayer.methodTests = {};
+            
+            testMethods.forEach(method => {
+              analysis.jwplayer.methodTests[method] = typeof player[method] === 'function';
+              console.log(`${method}: ${analysis.jwplayer.methodTests[method] ? '✅ DISPONÍVEL' : '❌ NÃO DISPONÍVEL'}`);
+            });
+          }
+        } catch (e) {
+          analysis.jwplayer.error = e.message;
+          console.log(`❌ Erro ao acessar jwplayer(): ${e.message}`);
+        }
       }
       
-      // Tentativa 5: Forçar execução de scripts pendentes
-      try {
-        // Executar scripts inline que podem inicializar o player
-        const inlineScripts = document.querySelectorAll('script:not([src])');
-        inlineScripts.forEach(script => {
-          try {
-            eval(script.textContent);
-            console.log('✅ Executado script inline');
-          } catch (e) {}
+      // 3. Elementos de vídeo
+      analysis.videos = [];
+      const videoElements = document.querySelectorAll('video');
+      videoElements.forEach((video, i) => {
+        analysis.videos.push({
+          index: i,
+          src: video.src,
+          currentSrc: video.currentSrc,
+          readyState: video.readyState,
+          paused: video.paused,
+          duration: video.duration
         });
-      } catch (e) {}
+        console.log(`Video ${i}: src="${video.src}", paused=${video.paused}`);
+      });
       
-      return { 
-        success: true, 
-        jwElements: jwElements.length,
-        jwScripts: jwScripts.length
+      // 4. Estado da página
+      analysis.pageState = {
+        title: document.title,
+        url: window.location.href,
+        readyState: document.readyState
+      };
+      
+      return {
+        analysis: analysis,
+        logs: window._myLogs
       };
     });
     
-    console.log(`📊 Inicialização: ${initResult.success ? '✅' : '❌'}`);
+    LOG('📊 ANÁLISE PRÉ-CLIQUE COMPLETA');
+    LOG(`Botão existe: ${preClickAnalysis.analysis.button.exists}`);
+    LOG(`JW Player existe: ${preClickAnalysis.analysis.jwplayer.exists}`);
+    LOG(`Vídeos encontrados: ${preClickAnalysis.analysis.videos.length}`);
     
-    // 7. AGORA TENTAR O CLIQUE - MAS DE FORMA DIFERENTE
-    console.log('🖱️ Tentando clique ESPECIAL em #player-button...');
+    // Mostrar logs da página
+    preClickAnalysis.logs.forEach(log => LOG(`PÁGINA: ${log}`, 'DEBUG'));
     
-    await page.evaluate(() => {
-      console.log('🎯 Clique especial iniciado');
+    // 🔴 PASSO CRÍTICO 2: O CLIQUE
+    LOG('🔴🔴🔴 EXECUTANDO O CLIQUE 🔴🔴🔴');
+    
+    const clickResult = await page.evaluate(() => {
+      window._clickLogs = ['=== INICIANDO CLIQUE ==='];
       
-      // Encontrar TODOS os elementos possíveis de play
-      const playElements = [
-        '#player-button',
-        '#player-button-container',
-        '[class*="play"]',
-        '[class*="Play"]',
-        'button[aria-label*="play"]',
-        'button[aria-label*="Play"]',
-        '.jw-icon-play',
-        '.jw-display-icon-play',
-        '[onclick*="play"]',
-        '[onclick*="Play"]'
-      ];
+      const result = { success: false, logs: window._clickLogs };
       
-      playElements.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-          try {
-            console.log(`🎯 Clicando em: ${selector}`);
-            
-            // Clique completo com todos os eventos
-            el.click();
-            
-            // Eventos de mouse
-            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
-              el.dispatchEvent(new MouseEvent(eventType, {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              }));
-            });
-            
-            // Eventos de toque (mobile)
-            ['touchstart', 'touchend'].forEach(eventType => {
-              el.dispatchEvent(new TouchEvent(eventType, {
-                bubbles: true,
-                cancelable: true,
-                touches: [new Touch({ identifier: 1, target: el })]
-              }));
-            });
-            
-          } catch (e) {
-            console.log(`⚠️ Erro ao clicar ${selector}: ${e.message}`);
-          }
-        });
-      });
+      try {
+        const button = document.querySelector('#player-button');
+        window._clickLogs.push(`Botão encontrado: ${!!button}`);
+        
+        if (button) {
+          window._clickLogs.push(`Tipo: ${button.tagName}, Classes: ${button.className}`);
+          
+          // Tentar DIVERSAS formas de clique
+          const clickMethods = [
+            () => {
+              window._clickLogs.push('Método 1: button.click()');
+              button.click();
+            },
+            () => {
+              window._clickLogs.push('Método 2: MouseEvent click');
+              button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            },
+            () => {
+              window._clickLogs.push('Método 3: mousedown + mouseup + click');
+              ['mousedown', 'mouseup', 'click'].forEach(type => {
+                button.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+              });
+            },
+            () => {
+              window._clickLogs.push('Método 4: focus + click');
+              button.focus();
+              button.click();
+            }
+          ];
+          
+          // Executar todos os métodos
+          clickMethods.forEach(method => {
+            try {
+              method();
+              window._clickLogs.push('✅ Método executado');
+            } catch (e) {
+              window._clickLogs.push(`❌ Erro: ${e.message}`);
+            }
+          });
+          
+          result.success = true;
+          window._clickLogs.push('=== CLIQUE CONCLUÍDO ===');
+          
+        } else {
+          window._clickLogs.push('❌ Botão não encontrado para clique');
+        }
+      } catch (e) {
+        window._clickLogs.push(`❌ ERRO GERAL: ${e.message}`);
+      }
       
-      console.log('✅ Clique especial concluído');
+      result.logs = window._clickLogs;
+      return result;
     });
     
-    console.log('⏳ Aguardando 5 segundos após clique especial...');
+    clickResult.logs.forEach(log => LOG(`CLIQUE: ${log}`, 'CLICK'));
+    LOG(`Clique bem-sucedido: ${clickResult.success ? '✅' : '❌'}`);
+    
+    // Aguardar após clique
+    LOG('Aguardando 5 segundos após clique...');
     await delay(5000);
     
-    // 8. VERIFICAR SE AGORA O JW PLAYER TEM OS MÉTODOS
-    console.log('🔍 Verificando métodos do JW Player após clique...');
+    // 🔴 PASSO CRÍTICO 3: ANÁLISE APÓS CLIQUE
+    LOG('🔴🔴🔴 ANÁLISE APÓS CLIQUE 🔴🔴🔴');
     
-    const playerStatus = await page.evaluate(() => {
-      const status = {};
+    const postClickAnalysis = await page.evaluate(() => {
+      window._postLogs = ['=== ANÁLISE PÓS-CLIQUE ==='];
       
-      if (typeof jwplayer === 'function') {
+      const analysis = {};
+      
+      // 1. Verificar JW Player APÓS clique
+      analysis.jwplayer = {};
+      analysis.jwplayer.exists = typeof jwplayer === 'function';
+      window._postLogs.push(`JW Player é função: ${analysis.jwplayer.exists}`);
+      
+      if (analysis.jwplayer.exists) {
         try {
           const player = jwplayer();
-          status.playerExists = !!player;
+          analysis.jwplayer.player = !!player;
+          window._postLogs.push(`JW Player instanciado: ${analysis.jwplayer.player}`);
           
           if (player) {
-            // Listar TODOS os métodos
-            status.allMethods = Object.getOwnPropertyNames(player)
-              .filter(key => typeof player[key] === 'function');
+            // Métodos disponíveis AGORA
+            const allProps = Object.getOwnPropertyNames(player);
+            analysis.jwplayer.methods = allProps.filter(p => typeof player[p] === 'function');
+            analysis.jwplayer.properties = allProps.filter(p => typeof player[p] !== 'function');
             
-            // Verificar métodos específicos
-            const targetMethods = ['getPlaylist', 'getConfig', 'getPlaylistItem', 'play', 'pause', 'setup', 'on'];
-            status.methods = {};
+            window._postLogs.push(`Métodos AGORA: ${analysis.jwplayer.methods.length}`);
+            window._postLogs.push(`Métodos: ${analysis.jwplayer.methods.join(', ')}`);
             
-            targetMethods.forEach(method => {
-              status.methods[method] = typeof player[method] === 'function';
-            });
-            
-            // Tentar usar o método 'setup' se existir (às vezes precisa)
-            if (status.methods.setup) {
+            // Testar getPlaylist ESPECIFICAMENTE
+            if (analysis.jwplayer.methods.includes('getPlaylist')) {
               try {
-                // Tentar re-setup do player
-                const config = player.getConfig ? player.getConfig() : {};
-                if (config) {
-                  player.setup(config);
-                  console.log('✅ Player re-setup executado');
+                analysis.playlist = player.getPlaylist();
+                window._postLogs.push(`✅ getPlaylist() FUNCIONOU! Itens: ${analysis.playlist ? analysis.playlist.length : 0}`);
+                
+                if (analysis.playlist && analysis.playlist[0]) {
+                  const item = analysis.playlist[0];
+                  analysis.url = item.file || (item.sources && item.sources[0] && item.sources[0].file);
+                  window._postLogs.push(`✅ URL ENCONTRADA: ${analysis.url}`);
                 }
               } catch (e) {
-                console.log(`⚠️ Erro no setup: ${e.message}`);
+                window._postLogs.push(`❌ getPlaylist() ERRO: ${e.message}`);
               }
+            } else {
+              window._postLogs.push('❌ getPlaylist() NÃO disponível');
             }
             
-            // Tentar usar 'on' para escutar eventos
-            if (status.methods.on) {
+            // Testar getConfig
+            if (analysis.jwplayer.methods.includes('getConfig')) {
               try {
-                player.on('ready', () => {
-                  console.log('✅ Evento ready disparado');
-                });
-                player.on('play', () => {
-                  console.log('✅ Evento play disparado');
-                });
-              } catch (e) {}
+                analysis.config = player.getConfig();
+                window._postLogs.push('✅ getConfig() FUNCIONOU!');
+              } catch (e) {
+                window._postLogs.push(`❌ getConfig() ERRO: ${e.message}`);
+              }
             }
           }
         } catch (e) {
-          status.error = e.message;
+          analysis.jwplayer.error = e.message;
+          window._postLogs.push(`❌ Erro jwplayer(): ${e.message}`);
         }
       }
       
-      return status;
-    });
-    
-    console.log(`📊 Métodos disponíveis: ${playerStatus.allMethods ? playerStatus.allMethods.join(', ') : 'nenhum'}`);
-    
-    // 9. SE AINDA NÃO FUNCIONOU, TENTAR UMA ABORDAGEM RADICAL
-    if (!playerStatus.methods || !playerStatus.methods.getPlaylist) {
-      console.log('⚠️ Métodos ainda não disponíveis, tentando abordagem RADICAL...');
-      
-      await page.evaluate(() => {
-        console.log('💥 ABORDAGEM RADICAL: Forçando inicialização completa');
-        
-        // 1. Remover e recriar elementos de vídeo
-        const videos = document.querySelectorAll('video');
-        videos.forEach(video => {
-          const newVideo = video.cloneNode(true);
-          video.parentNode.replaceChild(newVideo, video);
+      // 2. Verificar elementos de vídeo APÓS clique
+      analysis.videos = [];
+      const videoElements = document.querySelectorAll('video');
+      videoElements.forEach((video, i) => {
+        analysis.videos.push({
+          index: i,
+          src: video.src,
+          currentSrc: video.currentSrc,
+          paused: video.paused,
+          readyState: video.readyState
         });
-        
-        // 2. Forçar execução de TODOS os scripts JW Player
-        const scripts = document.querySelectorAll('script[src*="jwplayer"]');
-        scripts.forEach(script => {
-          const newScript = document.createElement('script');
-          newScript.src = script.src;
-          document.head.appendChild(newScript);
-          console.log(`📜 Re-carregado script: ${script.src}`);
-        });
-        
-        // 3. Disparar TODOS os eventos possíveis
-        const events = [
-          'load',
-          'DOMContentLoaded', 
-          'readystatechange',
-          'loadeddata',
-          'canplay',
-          'play',
-          'playing'
-        ];
-        
-        events.forEach(eventName => {
-          try {
-            const event = new Event(eventName, { bubbles: true });
-            document.dispatchEvent(event);
-            window.dispatchEvent(event);
-            
-            const videoElements = document.querySelectorAll('video');
-            videoElements.forEach(video => {
-              video.dispatchEvent(event);
-            });
-          } catch (e) {}
-        });
-        
-        console.log('💥 Abordagem radical concluída');
+        window._postLogs.push(`Video ${i}: src="${video.src}", paused=${video.paused}`);
       });
       
-      await delay(5000);
+      // 3. Estado da página
+      analysis.pageState = {
+        title: document.title,
+        url: window.location.href
+      };
+      
+      return {
+        analysis: analysis,
+        logs: window._postLogs
+      };
+    });
+    
+    postClickAnalysis.logs.forEach(log => LOG(`PÓS-CLIQUE: ${log}`, 'DEBUG'));
+    
+    LOG('📊 RESUMO PÓS-CLIQUE:');
+    LOG(`Métodos JW Player disponíveis: ${postClickAnalysis.analysis.jwplayer.methods ? postClickAnalysis.analysis.jwplayer.methods.length : 0}`);
+    LOG(`URL encontrada: ${postClickAnalysis.analysis.url ? '✅' : '❌'}`);
+    
+    // 🔴 PASSO CRÍTICO 4: VERIFICAÇÃO FINAL
+    if (!postClickAnalysis.analysis.url) {
+      LOG('❌❌❌ NENHUMA URL ENCONTRADA APÓS CLIQUE ❌❌❌', 'ERROR');
+      
+      // Derrubar TUDO para análise
+      const pageContent = await page.content();
+      LOG(`🔍 Conteúdo da página (primeiros 2000 chars): ${pageContent.substring(0, 2000)}`, 'DEBUG');
+      
+      await browser.close();
+      
+      res.status(500).json({
+        success: false,
+        error: 'URL NÃO ENCONTRADA após clique',
+        videoId: videoId,
+        logs: ALL_LOGS,
+        preClick: {
+          buttonExists: preClickAnalysis.analysis.button.exists,
+          jwplayerExists: preClickAnalysis.analysis.jwplayer.exists,
+          jwplayerMethods: preClickAnalysis.analysis.jwplayer.methods,
+          videos: preClickAnalysis.analysis.videos.length
+        },
+        click: {
+          success: clickResult.success,
+          logs: clickResult.logs
+        },
+        postClick: {
+          jwplayerMethods: postClickAnalysis.analysis.jwplayer.methods,
+          urlFound: !!postClickAnalysis.analysis.url,
+          videos: postClickAnalysis.analysis.videos
+        }
+      });
+      return;
     }
     
-    // 10. TENTAR EXTRAIR URL DE QUALQUER JEITO
-    console.log('🎯 Tentando extrair URL FINAL...');
-    
-    const finalResult = await page.evaluate((vid) => {
-      console.log(`🎯 Extração FINAL para: ${vid}`);
-      
-      const result = { url: null, method: null };
-      
-      // MÉTODO 1: JW Player normal
-      if (typeof jwplayer === 'function') {
-        try {
-          const player = jwplayer();
-          
-          // Tentar getPlaylist
-          if (typeof player.getPlaylist === 'function') {
-            const playlist = player.getPlaylist();
-            if (playlist && playlist[0]) {
-              result.url = playlist[0].file || 
-                          (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
-              result.method = 'getPlaylist';
-            }
-          }
-          
-          // Tentar getConfig
-          if (!result.url && typeof player.getConfig === 'function') {
-            const config = player.getConfig();
-            if (config && config.playlist && config.playlist[0]) {
-              result.url = config.playlist[0].file || 
-                          (config.playlist[0].sources && config.playlist[0].sources[0] && config.playlist[0].sources[0].file);
-              result.method = 'getConfig';
-            }
-          }
-        } catch (e) {
-          console.log(`❌ JW Player error: ${e.message}`);
-        }
-      }
-      
-      // MÉTODO 2: Elementos de vídeo
-      if (!result.url) {
-        const videos = document.querySelectorAll('video');
-        for (let video of videos) {
-          const src = video.src || video.currentSrc;
-          if (src && (src.includes('aesthorium') || src.includes('cf-master'))) {
-            result.url = src;
-            result.method = 'video element';
-            break;
-          }
-        }
-      }
-      
-      // MÉTODO 3: Iframes
-      if (!result.url) {
-        const iframes = document.querySelectorAll('iframe');
-        for (let iframe of iframes) {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            const videos = doc.querySelectorAll('video');
-            for (let video of videos) {
-              const src = video.src || video.currentSrc;
-              if (src && src.includes('aesthorium')) {
-                result.url = src;
-                result.method = 'iframe video';
-                break;
-              }
-            }
-          } catch (e) {}
-        }
-      }
-      
-      // MÉTODO 4: Procurar em scripts/estilos
-      if (!result.url) {
-        // Procurar em scripts
-        const scripts = document.querySelectorAll('script');
-        for (let script of scripts) {
-          const content = script.textContent || script.innerHTML || '';
-          const urlMatch = content.match(/https:\/\/[^\s"']*aesthorium[^\s"']*/g);
-          if (urlMatch) {
-            for (let url of urlMatch) {
-              if (url.includes(vid) || url.includes('cf-master')) {
-                result.url = url;
-                result.method = 'script content';
-                break;
-              }
-            }
-          }
-          if (result.url) break;
-        }
-      }
-      
-      // MÉTODO 5: URL padrão (último recurso)
-      if (!result.url) {
-        // Mesmo que você disse sem fallback, mas pelo menos tentamos
-        result.url = `https://sui.aurorioncreative.site/v4/is9/${vid}/cf-master.txt`;
-        result.method = 'fallback pattern';
-      }
-      
-      console.log(`🎯 Resultado final: ${result.url ? '✅' : '❌'} via ${result.method}`);
-      return result;
-    }, videoId);
+    // 🔴 SUCESSO!
+    LOG(`🎉🎉🎉 URL EXTRAÍDA COM SUCESSO: ${postClickAnalysis.analysis.url}`, 'SUCCESS');
     
     await browser.close();
     
-    if (finalResult.url) {
-      console.log(`🎉 URL OBTIDA: ${finalResult.url}`);
-      console.log(`📦 Método: ${finalResult.method}`);
-      
-      res.json({
-        success: true,
-        videoId: videoId,
-        url: finalResult.url,
-        method: finalResult.method,
-        extractedAt: new Date().toISOString(),
-        headers: {
-          'Referer': 'https://png.strp2p.com/',
-          'Origin': 'https://png.strp2p.com'
-        }
-      });
-    } else {
-      throw new Error('Não foi possível extrair URL após todas as tentativas');
-    }
+    res.json({
+      success: true,
+      videoId: videoId,
+      url: postClickAnalysis.analysis.url,
+      extractedAt: new Date().toISOString(),
+      logs: ALL_LOGS,
+      method: 'jwplayer().getPlaylist()',
+      headers: {
+        'Referer': 'https://png.strp2p.com/',
+        'Origin': 'https://png.strp2p.com'
+      }
+    });
     
   } catch (error) {
-    console.error(`❌ ERRO FINAL: ${error.message}`);
+    LOG(`❌❌❌ ERRO FATAL: ${error.message}`, 'ERROR');
     
     if (browser) await browser.close();
     
@@ -427,11 +389,13 @@ app.get('/extract', async (req, res) => {
       success: false,
       error: error.message,
       videoId: videoId,
-      note: 'Simulação completa falhou'
+      logs: ALL_LOGS,
+      note: 'Erro durante execução SEM FALLBACK'
     });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor de simulação perfeita: http://localhost:${PORT}/extract?id=juscu`);
+  console.log(`🚀 Servidor SEM FALLBACK rodando: http://localhost:${PORT}/extract?id=juscu`);
+  console.log(`⚠️  ATENÇÃO: NÃO HÁ FALLBACK - ou funciona ou dá erro`);
 });
