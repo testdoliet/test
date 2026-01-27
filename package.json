@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
+    "puppeteer": "^21.0.0",  // Use versão compatível
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "node-fetch": "^3.3.2"
