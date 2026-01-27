@@ -1,6 +1,6 @@
-// server.js - COM STEALTH (importação correta)
+// server.js - CÓDIGO COMPLETO COM STEALTH
 const express = require('express');
-const puppeteer = require('puppeteer-extra'); // MUDOU AQUI!
+const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 // Usar plugin stealth
@@ -11,14 +11,29 @@ const PORT = process.env.PORT || 3000;
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ROTA RAIZ - ESSENCIAL
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    message: 'Proxy com Stealth Plugin',
+    endpoints: {
+      '/extract?id=VIDEO_ID': 'Extrair URL do vídeo (com bypass)',
+      '/test?id=VIDEO_ID': 'Testar extração',
+      '/health': 'Health check'
+    },
+    example: 'http://localhost:3000/extract?id=juscu'
+  });
+});
+
+// ROTA DE EXTRACÇÃO COM STEALTH
 app.get('/extract', async (req, res) => {
   const videoId = req.query.id || 'juscu';
   
-  console.log(`\n🎯 BYPASS DETECÇÃO HEADLESS PARA: ${videoId}`);
+  console.log(`\n🔓 EXTRACÇÃO COM STEALTH PARA: ${videoId}`);
   
   let browser = null;
   try {
-    // CONFIGURAÇÃO AVANÇADA PARA BYPASS
+    // Configuração stealth
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -27,151 +42,91 @@ app.get('/extract', async (req, res) => {
         '--disable-blink-features=AutomationControlled',
         '--disable-web-security',
         '--disable-features=IsolateOrigins,site-per-process',
-        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--window-size=1920,1080'
       ]
     });
     
     const page = await browser.newPage();
     
-    // EVITAR DETECÇÃO: Esconder WebDriver
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => undefined
-      });
-    });
-    
-    // EVITAR DETECÇÃO: Esconder languages
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['pt-BR', 'pt', 'en-US', 'en']
-      });
-    });
-    
-    // EVITAR DETECÇÃO: Chrome runtime
-    await page.evaluateOnNewDocument(() => {
-      window.chrome = {
-        runtime: {}
-      };
-    });
-    
     // Headers realistas
     await page.setExtraHTTPHeaders({
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
       'Accept-Encoding': 'gzip, deflate, br',
       'Referer': 'https://png.strp2p.com/',
       'Origin': 'https://png.strp2p.com',
       'DNT': '1',
       'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'same-origin',
-      'Sec-Fetch-User': '?1'
+      'Upgrade-Insecure-Requests': '1'
     });
     
-    // Viewport realista
-    await page.setViewport({
-      width: 1920,
-      height: 1080,
-      deviceScaleFactor: 1,
-      hasTouch: false,
-      isLandscape: false,
-      isMobile: false
+    console.log(`🌐 Navegando para: https://png.strp2p.com/#${videoId}`);
+    await page.goto(`https://png.strp2p.com/#${videoId}`, {
+      waitUntil: 'networkidle2',
+      timeout: 60000
     });
     
-    console.log(`🌐 Navegando com stealth para: https://png.strp2p.com/#${videoId}`);
-    
-    // Navegar SEM waitUntil (mais natural)
-    await page.goto(`https://png.strp2p.com/#${videoId}`);
-    
-    console.log('⏳ Aguardando de forma natural (sem delays fixos)...');
-    
-    // Esperar de forma mais natural
-    await page.waitForFunction(() => {
-      return document.readyState === 'complete' && 
-             document.body && 
-             document.body.children.length > 0;
-    }, { timeout: 30000 });
-    
-    console.log('✅ Página carregada naturalmente');
+    console.log('✅ Página carregada');
     
     // Verificar se não foi bloqueado
     const pageContent = await page.content();
     if (pageContent.includes('Headless Browser is not allowed')) {
-      throw new Error('Site ainda detectou headless browser');
+      throw new Error('Site detectou navegador headless');
     }
     
-    console.log('✅ Bypass da detecção funcionou!');
+    console.log('🔓 Bypass da detecção funcionou!');
     
-    // AGORA fazer o que você faz no console
-    console.log('🖱️  Executando: document.querySelector("#player-button").click()');
-    
-    // Usar waitForSelector para garantir que o botão está realmente lá
-    await page.waitForSelector('#player-button', { timeout: 10000 });
-    
-    // Clique com mais naturalidade
-    await page.click('#player-button', {
-      delay: 100, // Delay humano entre mouse down e up
-      button: 'left'
-    });
-    
-    console.log('✅ Clique realizado');
-    
-    // Esperar resposta natural do player
+    // Aguardar
     await delay(3000);
     
-    console.log('💻 Executando: jwplayer().getPlaylist()');
+    // Executar clique
+    console.log('🖱️  Clicando em #player-button...');
+    await page.waitForSelector('#player-button', { timeout: 10000 });
+    await page.click('#player-button');
     
-    // Executar seus comandos
+    console.log('✅ Clique realizado');
+    await delay(2000);
+    
+    // Executar comandos do console
+    console.log('💻 Executando jwplayer().getPlaylist()...');
+    
     const result = await page.evaluate(() => {
-      console.log('🔄 Executando comandos no console da página...');
+      console.log('🔄 Executando no console da página...');
       
-      // Verificar estado
-      console.log('JW Player disponível:', typeof jwplayer === 'function');
-      console.log('Métodos disponíveis:', typeof jwplayer === 'function' ? Object.keys(jwplayer()) : 'n/a');
+      if (typeof jwplayer !== 'function') {
+        return { success: false, error: 'jwplayer não encontrado' };
+      }
       
-      if (typeof jwplayer === 'function') {
+      try {
+        // Tentar getPlaylist()
+        const playlist = jwplayer().getPlaylist();
+        console.log('Playlist encontrada:', playlist);
+        
+        if (playlist && playlist[0]) {
+          const url = playlist[0].file || 
+                     (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
+          return { success: true, url: url, source: 'getPlaylist' };
+        }
+      } catch (e) {
+        console.log('getPlaylist falhou:', e.message);
+        
+        // Tentar getConfig()
         try {
-          const playlist = jwplayer().getPlaylist();
-          console.log('getPlaylist resultado:', playlist);
+          const config = jwplayer().getConfig();
+          console.log('Config encontrada:', config);
           
-          if (playlist && playlist[0]) {
-            const url = playlist[0].file || 
-                       (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
-            return {
-              success: true,
-              url: url,
-              playlist: playlist
-            };
+          if (config && config.playlist && config.playlist[0]) {
+            const url = config.playlist[0].file || 
+                       (config.playlist[0].sources && config.playlist[0].sources[0] && config.playlist[0].sources[0].file);
+            return { success: true, url: url, source: 'getConfig' };
           }
-        } catch (e) {
-          console.log('Erro getPlaylist:', e.message);
-          
-          // Tentar getConfig
-          try {
-            const config = jwplayer().getConfig();
-            console.log('getConfig resultado:', config);
-            
-            if (config && config.playlist && config.playlist[0]) {
-              const url = config.playlist[0].file || 
-                         (config.playlist[0].sources && config.playlist[0].sources[0] && config.playlist[0].sources[0].file);
-              return {
-                success: true,
-                url: url,
-                config: config
-              };
-            }
-          } catch (e2) {
-            console.log('Erro getConfig:', e2.message);
-          }
+        } catch (e2) {
+          console.log('getConfig falhou:', e2.message);
         }
       }
       
-      return {
-        success: false,
-        error: 'Não conseguiu extrair URL'
-      };
+      return { success: false, error: 'Não conseguiu extrair URL' };
     });
     
     await browser.close();
@@ -183,8 +138,8 @@ app.get('/extract', async (req, res) => {
         success: true,
         videoId: videoId,
         url: result.url,
+        source: result.source,
         extractedAt: new Date().toISOString(),
-        method: 'jwplayer().getPlaylist()',
         headers: {
           'Referer': 'https://png.strp2p.com/',
           'Origin': 'https://png.strp2p.com'
@@ -203,12 +158,59 @@ app.get('/extract', async (req, res) => {
       success: false,
       error: error.message,
       videoId: videoId,
-      note: 'Bypass da detecção pode ter falhado'
+      note: 'Stealth pode não ter funcionado'
     });
   }
 });
 
+// ROTA DE TESTE
+app.get('/test', async (req, res) => {
+  const videoId = req.query.id || 'juscu';
+  
+  try {
+    const response = await fetch(`http://localhost:${PORT}/extract?id=${videoId}`);
+    const data = await response.json();
+    
+    if (data.success && data.url) {
+      // Testar o URL
+      const testResponse = await fetch(data.url, {
+        headers: data.headers
+      });
+      
+      const content = await testResponse.text();
+      
+      res.json({
+        test: 'success',
+        url: data.url,
+        status: testResponse.status,
+        isPlaylist: content.includes('#EXTM3U'),
+        contentPreview: content.substring(0, 200)
+      });
+    } else {
+      res.json({
+        test: 'failed',
+        error: data.error
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      test: 'error',
+      error: error.message
+    });
+  }
+});
+
+// HEALTH CHECK
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// INICIAR SERVIDOR
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor com stealth plugin: http://localhost:${PORT}/extract?id=juscu`);
-  console.log(`📦 Instale as dependências: npm install puppeteer-extra puppeteer-extra-plugin-stealth`);
+  console.log(`🚀 Servidor com Stealth rodando: http://localhost:${PORT}`);
+  console.log(`🔗 Teste: http://localhost:${PORT}/extract?id=juscu`);
 });
