@@ -1,128 +1,78 @@
+// server.js - SEM Puppeteer, SÓ fetch
 const express = require('express');
-const puppeteer = require('puppeteer');
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CONFIGURAÇÃO ESPECIAL PARA RENDER
-const puppeteerOptions = {
-  headless: true,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--single-process',
-    '--no-zygote',
-    '--disable-accelerated-2d-canvas',
-    '--disable-web-security',
-    '--window-size=1920,1080'
-  ],
-  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-    (process.platform === 'linux' ? '/usr/bin/google-chrome-stable' : puppeteer.executablePath())
-};
+// Middleware para evitar crash
+app.use((req, res, next) => {
+  res.setTimeout(10000, () => {
+    res.status(500).json({ error: 'Timeout' });
+  });
+  next();
+});
 
-// Rota simples de teste
 app.get('/', (req, res) => {
   res.json({ 
     status: 'online', 
-    message: 'Strp2p Proxy está funcionando!',
-    endpoint: '/stream?id=VIDEO_ID'
+    usage: '/stream?id=VIDEO_ID',
+    example: '/stream?id=wdlhc'
   });
 });
 
-// Rota principal SIMPLIFICADA
 app.get('/stream', async (req, res) => {
-  const videoId = req.query.id || 'wdlhc'; // default para teste
+  const videoId = req.query.id || 'wdlhc';
   
-  console.log(`🔍 Buscando vídeo: ${videoId}`);
-  
-  let browser;
+  console.log(`🔍 Buscando: ${videoId}`);
   
   try {
-    // Iniciar browser COM TIMEOUT
-    browser = await puppeteer.launch(puppeteerOptions);
-    
-    const page = await browser.newPage();
-    
-    // Configurar timeout menor
-    page.setDefaultTimeout(15000);
-    
-    // User-Agent simples
-    await page.setUserAgent('Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36');
-    
-    // Ir para página
-    console.log(`📄 Acessando página...`);
-    await page.goto(`https://png.strp2p.com/#${videoId}`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15000
+    // 1. Buscar página
+    const response = await fetch(`https://png.strp2p.com/#${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      timeout: 10000
     });
     
-    // Aguardar um pouco
-    await page.waitForTimeout(2000);
+    const html = await response.text();
     
-    // Tentar clicar no botão
-    console.log(`🖱️ Tentando clicar no botão...`);
-    const clicked = await page.evaluate(() => {
-      const btn = document.querySelector('#player-button') || 
-                 document.querySelector('#player-button-container');
-      if (btn) {
-        btn.click();
-        return true;
-      }
-      return false;
-    });
+    // 2. Extrair URL com MÚLTIPLOS métodos
+    let videoUrl = null;
     
-    console.log(clicked ? '✅ Botão clicado' : '⚠️ Botão não encontrado');
+    // Método A: Regex específico
+    const specificPattern = new RegExp(`https://sri\\.aesthorium\\.sbs/v4/9a/${videoId}/[^"'\s]*\\.txt[^"'\s]*`, 'i');
+    const specificMatch = html.match(specificPattern);
+    if (specificMatch) videoUrl = specificMatch[0];
     
-    // Aguardar mais um pouco
-    await page.waitForTimeout(3000);
-    
-    // Extrair URL SIMPLIFICADO
-    console.log(`🔗 Extraindo URL...`);
-    const result = await page.evaluate(() => {
-      // Método 1: Procurar URL diretamente
-      const scripts = Array.from(document.querySelectorAll('script'));
-      for (const script of scripts) {
-        const text = script.textContent || script.innerHTML || '';
-        const match = text.match(/https:\/\/sri\.aesthorium\.sbs[^"'\s]*\.txt[^"'\s]*/);
-        if (match) return match[0];
-      }
-      
-      // Método 2: Procurar em toda página
-      const html = document.documentElement.innerHTML;
-      const matches = html.match(/https:\/\/sri\.aesthorium\.sbs[^"'\s]*/g) || [];
-      return matches.find(url => url.includes('.txt')) || matches[0];
-    });
-    
-    await browser.close();
-    
-    if (result) {
-      console.log(`✅ URL encontrada: ${result.substring(0, 80)}...`);
-      res.json({
-        success: true,
-        url: result,
-        headers: {
-          'Referer': 'https://png.strp2p.com/',
-          'Origin': 'https://png.strp2p.com'
-        }
-      });
-    } else {
-      res.json({
-        success: false,
-        error: 'URL não encontrada',
-        tip: 'Tente verificar manualmente a página'
-      });
+    // Método B: Regex geral
+    if (!videoUrl) {
+      const generalPattern = /https:\/\/sri\.aesthorium\.sbs\/[^"'\s]*\.txt[^"'\s]*/g;
+      const allUrls = html.match(generalPattern) || [];
+      videoUrl = allUrls.find(url => url.includes(videoId)) || allUrls[0];
     }
+    
+    // Método C: Padrão conhecido (fallback)
+    if (!videoUrl) {
+      videoUrl = `https://sri.aesthorium.sbs/v4/9a/${videoId}/cf-master.txt`;
+    }
+    
+    console.log(`✅ URL: ${videoUrl ? videoUrl.substring(0, 80) + '...' : 'Não encontrada'}`);
+    
+    res.json({
+      success: true,
+      url: videoUrl,
+      headers: {
+        'Referer': 'https://png.strp2p.com/',
+        'Origin': 'https://png.strp2p.com',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36'
+      },
+      note: videoUrl.includes('cf-master.txt') ? 'URL padrão - pode precisar de parâmetros extras' : null
+    });
     
   } catch (error) {
     console.error(`❌ Erro: ${error.message}`);
-    
-    if (browser) {
-      try { await browser.close(); } catch (e) {}
-    }
-    
-    // Retornar erro SIMPLES sem crash
     res.status(500).json({
       success: false,
       error: error.message,
@@ -131,23 +81,29 @@ app.get('/stream', async (req, res) => {
   }
 });
 
-// Health check SIMPLES
 app.get('/health', (req, res) => {
   res.json({ 
-    status: 'ok', 
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    memory: process.memoryUsage()
+    memory: process.memoryUsage().heapUsed / 1024 / 1024 + ' MB'
   });
 });
 
-// Error handler para evitar crash
-app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ error: 'Algo deu errado' });
+// Error handler global
+app.use((error, req, res, next) => {
+  console.error('Erro global:', error);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-// Iniciar
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`👉 Teste: http://localhost:${PORT}/stream?id=wdlhc`);
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT} (SEM Puppeteer)`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
