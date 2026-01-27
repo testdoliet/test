@@ -1,9 +1,12 @@
-// server.js - SEM FALLBACK
+// server.js - CORRIGIDO (sem waitForTimeout)
 const express = require('express');
 const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Função delay compatível
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.get('/', (req, res) => {
   res.json({
@@ -43,8 +46,8 @@ app.get('/extract', async (req, res) => {
       timeout: 30000
     });
     
-    // Aguardar
-    await page.waitForTimeout(3000);
+    // Aguardar usando delay
+    await delay(3000);
     
     // PASSO 1: document.querySelector('#player-button').click();
     console.log('🖱️  Executando: document.querySelector("#player-button").click()');
@@ -65,7 +68,7 @@ app.get('/extract', async (req, res) => {
     console.log(`Click: ${clickResult.success ? '✅' : '❌'} ${clickResult.message}`);
     
     // Aguardar após clique
-    await page.waitForTimeout(2000);
+    await delay(2000);
     
     // PASSO 2: jwplayer().getPlaylist()
     console.log('💻 Executando: jwplayer().getPlaylist()');
