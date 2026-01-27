@@ -1,152 +1,314 @@
-// server.js - CÓDIGO COMPLETO COM STEALTH
+// server.js - BYPASS MANUAL SEM STEALTH PLUGIN
 const express = require('express');
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
-// Usar plugin stealth
-puppeteer.use(StealthPlugin());
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ROTA RAIZ - ESSENCIAL
+// TÉCNICAS DE BYPASS MANUAIS
+async function configurePageForBypass(page) {
+  // 1. Esconder WebDriver
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => false
+    });
+    
+    // 2. Sobrescrever chrome
+    window.chrome = {
+      runtime: {},
+      loadTimes: () => {},
+      csi: () => {},
+      app: {}
+    };
+    
+    // 3. Sobrescrever permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => {
+      if (parameters.name === 'notifications') {
+        return Promise.resolve({ state: Notification.permission });
+      }
+      return originalQuery(parameters);
+    };
+    
+    // 4. Sobrescrever plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5]
+    });
+    
+    // 5. Sobrescrever languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['pt-BR', 'pt', 'en-US', 'en']
+    });
+    
+    // 6. Sobrescrever userAgent
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+  });
+}
+
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
-    message: 'Proxy com Stealth Plugin',
-    endpoints: {
-      '/extract?id=VIDEO_ID': 'Extrair URL do vídeo (com bypass)',
-      '/test?id=VIDEO_ID': 'Testar extração',
-      '/health': 'Health check'
-    },
+    message: 'Proxy com bypass manual',
+    endpoint: '/extract?id=VIDEO_ID',
     example: 'http://localhost:3000/extract?id=juscu'
   });
 });
 
-// ROTA DE EXTRACÇÃO COM STEALTH
 app.get('/extract', async (req, res) => {
   const videoId = req.query.id || 'juscu';
   
-  console.log(`\n🔓 EXTRACÇÃO COM STEALTH PARA: ${videoId}`);
+  console.log(`\n🎯 BYPASS MANUAL PARA: ${videoId}`);
   
   let browser = null;
   try {
-    // Configuração stealth
+    // Configuração para evitar detecção
     browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new', // 'new' headless é menos detectável
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        '--window-size=1920,1080'
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--window-size=1920,1080',
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       ]
     });
     
     const page = await browser.newPage();
     
+    // Configurar bypass
+    await configurePageForBypass(page);
+    
     // Headers realistas
     await page.setExtraHTTPHeaders({
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
       'Accept-Encoding': 'gzip, deflate, br',
       'Referer': 'https://png.strp2p.com/',
       'Origin': 'https://png.strp2p.com',
       'DNT': '1',
       'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1'
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0'
     });
     
-    console.log(`🌐 Navegando para: https://png.strp2p.com/#${videoId}`);
+    // Viewport realista
+    await page.setViewport({
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1
+    });
+    
+    console.log(`🌐 Navegando (com bypass) para: https://png.strp2p.com/#${videoId}`);
+    
+    // Navegar de forma mais natural
     await page.goto(`https://png.strp2p.com/#${videoId}`, {
-      waitUntil: 'networkidle2',
-      timeout: 60000
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
     });
-    
-    console.log('✅ Página carregada');
     
     // Verificar se não foi bloqueado
-    const pageContent = await page.content();
-    if (pageContent.includes('Headless Browser is not allowed')) {
-      throw new Error('Site detectou navegador headless');
+    const content = await page.content();
+    if (content.includes('Headless Browser is not allowed')) {
+      throw new Error('Site ainda detectou headless mesmo com bypass');
     }
     
-    console.log('🔓 Bypass da detecção funcionou!');
+    console.log('✅ Bypass funcionou! Página carregada');
     
-    // Aguardar
+    // Aguardar de forma mais inteligente
+    await page.waitForFunction(() => {
+      return document.querySelector('#player-button') || document.querySelector('.jwplayer');
+    }, { timeout: 10000 });
+    
+    console.log('🎯 Elementos do player carregados');
+    
+    // Fazer screenshot para debug (opcional)
+    // await page.screenshot({ path: 'debug.png' });
+    
+    // Tentar clique múltiplas vezes
+    console.log('🖱️  Tentando cliques múltiplos...');
+    
+    for (let i = 0; i < 3; i++) {
+      try {
+        await page.evaluate(() => {
+          const btn = document.querySelector('#player-button');
+          if (btn) {
+            // Clique com eventos completos
+            btn.focus();
+            btn.click();
+            
+            // Disparar eventos manualmente também
+            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+              btn.dispatchEvent(new MouseEvent(eventType, {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              }));
+            });
+            
+            console.log(`✅ Clique ${i + 1} realizado`);
+          }
+        });
+        
+        await delay(1000);
+      } catch (e) {
+        console.log(`⚠️  Tentativa ${i + 1} falhou: ${e.message}`);
+      }
+    }
+    
+    console.log('⏳ Aguardando inicialização do player...');
     await delay(3000);
     
-    // Executar clique
-    console.log('🖱️  Clicando em #player-button...');
-    await page.waitForSelector('#player-button', { timeout: 10000 });
-    await page.click('#player-button');
+    // Verificar se o JW Player agora tem os métodos
+    console.log('🔍 Verificando métodos do JW Player...');
     
-    console.log('✅ Clique realizado');
-    await delay(2000);
-    
-    // Executar comandos do console
-    console.log('💻 Executando jwplayer().getPlaylist()...');
-    
-    const result = await page.evaluate(() => {
-      console.log('🔄 Executando no console da página...');
+    const playerState = await page.evaluate(() => {
+      const state = {};
       
-      if (typeof jwplayer !== 'function') {
-        return { success: false, error: 'jwplayer não encontrado' };
-      }
-      
-      try {
-        // Tentar getPlaylist()
-        const playlist = jwplayer().getPlaylist();
-        console.log('Playlist encontrada:', playlist);
-        
-        if (playlist && playlist[0]) {
-          const url = playlist[0].file || 
-                     (playlist[0].sources && playlist[0].sources[0] && playlist[0].sources[0].file);
-          return { success: true, url: url, source: 'getPlaylist' };
-        }
-      } catch (e) {
-        console.log('getPlaylist falhou:', e.message);
-        
-        // Tentar getConfig()
+      if (typeof jwplayer === 'function') {
         try {
-          const config = jwplayer().getConfig();
-          console.log('Config encontrada:', config);
+          const player = jwplayer();
+          state.exists = true;
           
-          if (config && config.playlist && config.playlist[0]) {
-            const url = config.playlist[0].file || 
-                       (config.playlist[0].sources && config.playlist[0].sources[0] && config.playlist[0].sources[0].file);
-            return { success: true, url: url, source: 'getConfig' };
+          // Listar métodos disponíveis
+          const allProps = Object.getOwnPropertyNames(player);
+          state.methods = allProps.filter(prop => typeof player[prop] === 'function');
+          
+          console.log('Métodos disponíveis:', state.methods);
+          
+          // Tentar getPlaylist
+          if (state.methods.includes('getPlaylist')) {
+            try {
+              state.playlist = player.getPlaylist();
+              console.log('✅ getPlaylist funcionou');
+              
+              if (state.playlist && state.playlist[0]) {
+                state.url = state.playlist[0].file || 
+                           (state.playlist[0].sources && state.playlist[0].sources[0] && state.playlist[0].sources[0].file);
+              }
+            } catch (e) {
+              console.log('❌ getPlaylist erro:', e.message);
+            }
           }
-        } catch (e2) {
-          console.log('getConfig falhou:', e2.message);
+          
+          // Se não, tentar getConfig
+          if (!state.url && state.methods.includes('getConfig')) {
+            try {
+              state.config = player.getConfig();
+              console.log('✅ getConfig funcionou');
+              
+              if (state.config && state.config.playlist && state.config.playlist[0]) {
+                state.url = state.config.playlist[0].file || 
+                           (state.config.playlist[0].sources && state.config.playlist[0].sources[0] && state.config.playlist[0].sources[0].file);
+              }
+            } catch (e) {
+              console.log('❌ getConfig erro:', e.message);
+            }
+          }
+          
+        } catch (e) {
+          state.error = e.message;
         }
+      } else {
+        state.exists = false;
       }
       
-      return { success: false, error: 'Não conseguiu extrair URL' };
+      return state;
     });
     
-    await browser.close();
+    console.log(`📊 Estado do player: ${playerState.exists ? '✅ Existe' : '❌ Não existe'}`);
+    console.log(`Métodos: ${playerState.methods ? playerState.methods.join(', ') : 'nenhum'}`);
     
-    if (result.success && result.url) {
-      console.log(`🎉 URL EXTRAÍDA: ${result.url}`);
+    if (playerState.url) {
+      console.log(`🎉 URL EXTRAÍDA: ${playerState.url}`);
+      
+      await browser.close();
       
       res.json({
         success: true,
         videoId: videoId,
-        url: result.url,
-        source: result.source,
+        url: playerState.url,
         extractedAt: new Date().toISOString(),
+        playerMethods: playerState.methods,
         headers: {
           'Referer': 'https://png.strp2p.com/',
           'Origin': 'https://png.strp2p.com'
         }
       });
     } else {
-      throw new Error(result.error || 'URL não encontrada');
+      // Última tentativa: procurar URLs manualmente
+      console.log('🔄 Última tentativa: procurar URLs manualmente...');
+      
+      const manualSearch = await page.evaluate(() => {
+        const urls = [];
+        
+        // 1. Procurar em scripts
+        const scripts = document.querySelectorAll('script');
+        scripts.forEach(script => {
+          const content = script.textContent || script.innerHTML || '';
+          const matches = content.match(/https:\/\/[^\s"']*aesthorium[^\s"']*/g) || 
+                         content.match(/https:\/\/[^\s"']*cf-master[^\s"']*/g);
+          if (matches) {
+            urls.push(...matches);
+          }
+        });
+        
+        // 2. Procurar em elementos de vídeo
+        const videos = document.querySelectorAll('video');
+        videos.forEach(video => {
+          if (video.src) urls.push(video.src);
+          if (video.currentSrc) urls.push(video.currentSrc);
+        });
+        
+        // 3. Procurar em iframes
+        const iframes = document.querySelectorAll('iframe');
+        iframes.forEach(iframe => {
+          try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            const iframeVideos = iframeDoc.querySelectorAll('video');
+            iframeVideos.forEach(video => {
+              if (video.src) urls.push(video.src);
+            });
+          } catch (e) {}
+        });
+        
+        return urls.filter(url => url.includes('aesthorium') || url.includes('cf-master'));
+      });
+      
+      console.log(`🔍 URLs encontradas manualmente: ${manualSearch.length}`);
+      
+      if (manualSearch.length > 0) {
+        console.log(`🎉 URL encontrada manualmente: ${manualSearch[0]}`);
+        
+        await browser.close();
+        
+        res.json({
+          success: true,
+          videoId: videoId,
+          url: manualSearch[0],
+          extractedAt: new Date().toISOString(),
+          method: 'busca manual',
+          note: 'URL encontrada via busca manual (JW Player não inicializou)',
+          headers: {
+            'Referer': 'https://png.strp2p.com/',
+            'Origin': 'https://png.strp2p.com'
+          }
+        });
+      } else {
+        throw new Error('Não foi possível extrair URL mesmo com bypass');
+      }
     }
     
   } catch (error) {
@@ -158,59 +320,11 @@ app.get('/extract', async (req, res) => {
       success: false,
       error: error.message,
       videoId: videoId,
-      note: 'Stealth pode não ter funcionado'
+      note: 'Bypass manual pode não ter sido suficiente'
     });
   }
 });
 
-// ROTA DE TESTE
-app.get('/test', async (req, res) => {
-  const videoId = req.query.id || 'juscu';
-  
-  try {
-    const response = await fetch(`http://localhost:${PORT}/extract?id=${videoId}`);
-    const data = await response.json();
-    
-    if (data.success && data.url) {
-      // Testar o URL
-      const testResponse = await fetch(data.url, {
-        headers: data.headers
-      });
-      
-      const content = await testResponse.text();
-      
-      res.json({
-        test: 'success',
-        url: data.url,
-        status: testResponse.status,
-        isPlaylist: content.includes('#EXTM3U'),
-        contentPreview: content.substring(0, 200)
-      });
-    } else {
-      res.json({
-        test: 'failed',
-        error: data.error
-      });
-    }
-    
-  } catch (error) {
-    res.json({
-      test: 'error',
-      error: error.message
-    });
-  }
-});
-
-// HEALTH CHECK
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// INICIAR SERVIDOR
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor com Stealth rodando: http://localhost:${PORT}`);
-  console.log(`🔗 Teste: http://localhost:${PORT}/extract?id=juscu`);
+  console.log(`🚀 Servidor com bypass manual: http://localhost:${PORT}/extract?id=juscu`);
 });
