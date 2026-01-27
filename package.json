@@ -1,22 +1,11 @@
 {
   "name": "strp2p-proxy",
   "version": "1.0.0",
-  "description": "Proxy para extrair vídeos do Strp2p - Clique automático no botão de play",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "start": "node server.js"
   },
-  "keywords": ["strp2p", "proxy", "video", "puppeteer", "cloudstream"],
-  "author": "Seu Nome",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^21.0.0",
-    "cors": "^2.8.5"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "puppeteer": "^21.0.0"
   }
 }
