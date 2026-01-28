@@ -3,6 +3,7 @@ FROM node:18-bullseye-slim
 # Instalar dependências mínimas para Puppeteer com display
 RUN apt-get update && apt-get install -y \
     wget \
+    gnupg \  # ADICIONADO ESTA LINHA
     ca-certificates \
     fonts-liberation \
     libappindicator3-1 \
