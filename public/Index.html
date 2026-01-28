@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Server - Railway</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        header { text-align: center; margin-bottom: 30px; padding: 20px; background: #2a2a2a; border-radius: 10px; }
+        header h1 { color: #00d9ff; margin-bottom: 10px; }
+        
+        .controls { background: #2a2a2a; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { flex: 1; padding: 12px; border: 2px solid #444; border-radius: 5px; background: #333; color: white; }
+        button { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: #00d9ff; color: black; }
+        .btn-secondary { background: #666; color: white; }
+        .btn-danger { background: #ff4444; color: white; }
+        
+        .output { background: #2a2a2a; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        .output h2 { margin-bottom: 15px; color: #00d9ff; }
+        pre { background: #1a1a1a; padding: 15px; border-radius: 5px; overflow: auto; max-height: 400px; }
+        
+        .status { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #00ff00; }
+        .status-dot.offline { background: #ff4444; }
+        
+        .screenshot { margin-top: 20px; max-width: 100%; border: 2px solid #444; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-globe"></i> Browser Server - Railway</h1>
+            <p>Navegação remota com interface gráfica</p>
+        </header>
+        
+        <div class="controls">
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Conectando...</span>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="urlInput" placeholder="https://google.com" value="https://google.com">
+                <button class="btn-primary" onclick="navigate()"><i class="fas fa-paper-plane"></i> Navegar</button>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="jsInput" placeholder="document.title">
+                <button class="btn-secondary" onclick="executeJS()"><i class="fas fa-code"></i> Executar JS</button>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn-secondary" onclick="takeScreenshot()"><i class="fas fa-camera"></i> Screenshot</button>
+                <button class="btn-secondary" onclick="getPageInfo()"><i class="fas fa-info-circle"></i> Info</button>
+                <button class="btn-danger" onclick="restartBrowser()"><i class="fas fa-redo"></i> Reiniciar</button>
+            </div>
+        </div>
+        
+        <div class="output">
+            <h2><i class="fas fa-terminal"></i> Console</h2>
+            <pre id="console">Aguardando comandos...</pre>
+        </div>
+        
+        <div class="output">
+            <h2><i class="fas fa-image"></i> Screenshot</h2>
+            <img id="screenshot" class="screenshot" src="" alt="Screenshot aparecerá aqui">
+        </div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const consoleEl = document.getElementById('console');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        
+        // Status da conexão
+        socket.on('connect', () => {
+            log('✅ Conectado ao servidor');
+            updateStatus(true);
+        });
+        
+        socket.on('disconnect', () => {
+            log('❌ Desconectado do servidor');
+            updateStatus(false);
+        });
+        
+        socket.on('page_update', (data) => {
+            log(`📄 Página atualizada: ${data.title}`);
+        });
+        
+        // Funções principais
+        async function navigate() {
+            const url = document.getElementById('urlInput').value;
+            if (!url) return alert('Digite uma URL');
+            
+            log(`🌐 Navegando para: ${url}`);
+            
+            try {
+                const response = await fetch('/api/navigate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    log(`✅ Navegação bem-sucedida: ${data.data.title}`);
+                    
+                    // Atualizar screenshot se existir
+                    if (data.data.screenshot) {
+                        document.getElementById('screenshot').src = data.data.screenshot;
+                    }
+                    
+                    // Mostrar informações
+                    consoleEl.innerHTML += `\n\n📋 Informações:\nURL: ${data.data.url}\nTítulo: ${data.data.title}`;
+                    
+                } else {
+                    log(`❌ Erro: ${data.error}`);
+                }
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`);
+            }
+        }
+        
+        async function executeJS() {
+            const code = document.getElementById('jsInput').value;
+            if (!code) return alert('Digite código JavaScript');
+            
+            log(`⚡ Executando: ${code}`);
+            
+            try {
+                const response = await fetch('/api/eval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    log(`✅ Resultado: ${JSON.stringify(data.result, null, 2)}`);
+                } else {
+                    log(`❌ Erro: ${data.error}`);
+                }
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`);
+            }
+        }
+        
+        async function takeScreenshot() {
+            // Recarrega a página atual para capturar screenshot
+            const currentUrl = document.getElementById('urlInput').value;
+            if (currentUrl) {
+                await navigate();
+            }
+        }
+        
+        async function getPageInfo() {
+            executeJS('document.title');
+        }
+        
+        async function restartBrowser() {
+            if (!confirm('Reiniciar navegador?')) return;
+            
+            log('🔄 Reiniciando navegador...');
+            
+            try {
+                await fetch('/api/close', { method: 'POST' });
+                log('✅ Navegador fechado. A próxima navegação iniciará um novo.');
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`);
+            }
+        }
+        
+        // Funções auxiliares
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleEl.innerHTML += `\n[${timestamp}] ${message}`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            if (connected) {
+                statusDot.style.background = '#00ff00';
+                statusText.textContent = 'Conectado';
+            } else {
+                statusDot.style.background = '#ff4444';
+                statusText.textContent = 'Desconectado';
+            }
+        }
+        
+        // Inicialização
+        window.addEventListener('load', () => {
+            log('🚀 Browser Server pronto!');
+            log('Digite uma URL e clique em "Navegar"');
+        });
+    </script>
+</body>
+</html>
